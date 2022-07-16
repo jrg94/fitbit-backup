@@ -2,12 +2,21 @@ import logging
 from logging.handlers import RotatingFileHandler
 import os
 from datetime import datetime
+from pathlib import Path
+import tempfile
+import shutil
 
 import dotenv
 import fitbit
 import pandas as pd
+from git import Repo
 
-log_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "logs", "fitbit.log")
+
+log_path = os.path.join(
+    os.path.abspath(os.path.dirname(__file__)),
+    "logs",
+    "fitbit.log"
+)
 logging.basicConfig(
     handlers=[RotatingFileHandler(log_path, backupCount=10, maxBytes=1000000)],
     level=logging.DEBUG,
@@ -20,7 +29,7 @@ log = logging.getLogger(__name__)
 def refresh_cb(token: dict):
     """
     Provides a mechanism for updating the Fitbit API tokens.
-    
+
     :param token: a dictionary of token data
     """
     if os.environ.get("FITBIT_ACCESS_TOKEN") != token["access_token"]:
@@ -30,6 +39,7 @@ def refresh_cb(token: dict):
         log.info("Updating FITBIT_REFRESH_TOKEN.")
         dotenv.set_key(".env", "FITBIT_REFRESH_TOKEN", token["refresh_token"])
     dotenv.set_key(".env", "FITBIT_EXPIRES_AT", str(token["expires_at"]))
+
 
 # Load the .env file
 log.info("Loading .env file.")
@@ -46,10 +56,10 @@ EXPIRES_AT = os.environ.get("FITBIT_EXPIRES_AT")
 # Initiate the Fitbit API
 log.info("Initiating Fitbit API.")
 client = fitbit.Fitbit(
-    CLIENT_ID, 
-    CLIENT_SECRET, 
-    access_token=ACCESS_TOKEN, 
-    refresh_token=REFRESH_TOKEN, 
+    CLIENT_ID,
+    CLIENT_SECRET,
+    access_token=ACCESS_TOKEN,
+    refresh_token=REFRESH_TOKEN,
     refresh_cb=refresh_cb
 )
 
@@ -62,7 +72,7 @@ last_day = datetime.today().replace(year=datetime.today().year + 1)
 log.info("Pulling data.")
 date_range = pd.date_range(first_day, last_day, freq=pd.offsets.YearEnd())
 steps_raw = []
-for year in date_range: 
+for year in date_range:
     year_of_steps = client.time_series("activities/steps", period="1y", base_date=year)
     steps_raw.extend(year_of_steps["activities-steps"])
 steps = pd.DataFrame(steps_raw)
@@ -74,5 +84,15 @@ steps["Steps"] = steps["Steps"].astype(int)
 steps = steps[steps["Steps"] > 0]
 steps.set_index("Date", inplace=True)
 
+# Store data
 steps.to_csv("data/fitbit.csv")
 print(steps)
+
+# Commit data to git
+with tempfile.TemporaryDirectory() as dir:
+    repo = Repo.clone_from("https://github.com/jrg94/personal-data.git", dir)
+    health_data_path = Path(dir) / "health"
+    shutil.copyfile("data/fitbit.csv", str(health_data_path / "fitbit.csv"))
+    repo.index.add([str(health_data_path / "fitbit.csv")])
+    repo.index.commit("Updated fitbit data.")
+    repo.remote(name="origin").push()
