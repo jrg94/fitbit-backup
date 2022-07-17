@@ -68,10 +68,11 @@ def get_fitbit_data(time_series: str, period: str, key: str, freq: str = pd.offs
     # Pull data
     log.info("Pulling data.")
     requests = 0
-    date_range = pd.date_range(first_day, last_day, freq=pd.offsets.YearEnd())
+    date_range = pd.date_range(first_day, last_day, freq=freq)
     data_set = []
-    for year in date_range:
-        year_of_steps = client.time_series(time_series, period=period, base_date=year)
+    for interval in date_range:
+        year_of_steps = client.time_series(time_series, period=period, base_date=interval)
+        log.info(f"{interval}: Retrieved {year_of_steps}.")
         data_set.extend(year_of_steps[key])
         requests += 1
         
@@ -130,7 +131,18 @@ if __name__ == "__main__":
     requests += weight_requests
     log.info(f"Completed {requests} requests out of our 150 limit.")
     weight_data = pd.DataFrame(weight_raw)
-    weight_data.rename(columns={"date": "Date", "weight": "Weight"}, inplace=True)
+    weight_data.rename(
+        columns={
+            "date": "Date", 
+            "weight": "Weight", 
+            "bmi": "BMI", 
+            "fat": "Body Fat %", 
+            "source": "Weight Source",
+            "time": "Weight Time"
+        }, 
+        inplace=True
+    )
+    weight_data.drop("logId", axis=1, inplace=True)
     weight_data["Weight"] = weight_data["Weight"].astype(float)
     weight_data.set_index("Date", inplace=True)
     
@@ -141,4 +153,4 @@ if __name__ == "__main__":
     data_set.to_csv("data/fitbit.csv")
 
     # Commit data to git
-    #commit_csv()
+    commit_csv()
