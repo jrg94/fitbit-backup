@@ -1,28 +1,16 @@
 import logging
-from logging.handlers import RotatingFileHandler
 import os
-from datetime import datetime
-from pathlib import Path
-import tempfile
 import shutil
+import tempfile
+from datetime import datetime
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 import dotenv
 import fitbit
 import pandas as pd
 from git import Repo
 
-
-log_path = os.path.join(
-    os.path.abspath(os.path.dirname(__file__)),
-    "logs",
-    "fitbit.log"
-)
-logging.basicConfig(
-    handlers=[RotatingFileHandler(log_path, backupCount=10, maxBytes=1000000)],
-    level=logging.DEBUG,
-    format='%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
-    datefmt='%Y-%m-%d:%H:%M:%S',
-)
 log = logging.getLogger(__name__)
 
 
@@ -46,63 +34,82 @@ def commit_csv() -> None:
     Commits the fitbit data to the personal data repo.
     """
     with tempfile.TemporaryDirectory() as dir:
-        repo = Repo.clone_from("https://github.com/jrg94/personal-data.git", dir)
+        repo = Repo.clone_from(
+            "https://github.com/jrg94/personal-data.git", dir)
         health_data_path = Path(dir) / "health"
-        shutil.copyfile("data/fitbit.csv", str(health_data_path / "fitbit.csv"))
+        shutil.copyfile("data/fitbit.csv",
+                        str(health_data_path / "fitbit.csv"))
         repo.index.add([str(health_data_path / "fitbit.csv")])
-        commit = repo.index.commit(f"Updated fitbit data automatically: {commit.stats.files}")
+        commit = repo.index.commit(f"Updated fitbit data automatically")
         if not commit.stats.files:
             log.info("No changes to commit.")
+        else:
+            log.info(f"Committing changes: {commit.stats.files}")
             repo.remote(name="origin").push()
         repo.close()
 
 
-# Load the .env file
-log.info("Loading .env file.")
-dotenv.load_dotenv()
+if __name__ == "__main__":
+    log_path = os.path.join(
+        os.path.abspath(os.path.dirname(__file__)),
+        "logs",
+        "fitbit.log"
+    )
+    logging.basicConfig(
+        handlers=[RotatingFileHandler(
+            log_path, backupCount=10, maxBytes=1000000)],
+        level=logging.DEBUG,
+        format='%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
+        datefmt='%Y-%m-%d:%H:%M:%S',
+    )
 
-# Parse out the tokens from the .env file
-log.info("Parsing tokens from .env file.")
-CLIENT_ID = os.environ.get("FITBIT_CLIENT_ID")
-CLIENT_SECRET = os.environ.get("FITBIT_CLIENT_SECRET")
-ACCESS_TOKEN = os.environ.get("FITBIT_ACCESS_TOKEN")
-REFRESH_TOKEN = os.environ.get("FITBIT_REFRESH_TOKEN")
-EXPIRES_AT = os.environ.get("FITBIT_EXPIRES_AT")
+    # Load the .env file
+    log.info("Loading .env file.")
+    dotenv.load_dotenv()
 
-# Initiate the Fitbit API
-log.info("Initiating Fitbit API.")
-client = fitbit.Fitbit(
-    CLIENT_ID,
-    CLIENT_SECRET,
-    access_token=ACCESS_TOKEN,
-    refresh_token=REFRESH_TOKEN,
-    refresh_cb=refresh_cb
-)
+    # Parse out the tokens from the .env file
+    log.info("Parsing tokens from .env file.")
+    CLIENT_ID = os.environ.get("FITBIT_CLIENT_ID")
+    CLIENT_SECRET = os.environ.get("FITBIT_CLIENT_SECRET")
+    ACCESS_TOKEN = os.environ.get("FITBIT_ACCESS_TOKEN")
+    REFRESH_TOKEN = os.environ.get("FITBIT_REFRESH_TOKEN")
+    EXPIRES_AT = os.environ.get("FITBIT_EXPIRES_AT")
 
-# Define dates to pull data for
-log.info("Defining dates to pull data for.")
-first_day = datetime(2015, 7, 26)
-last_day = datetime.today().replace(year=datetime.today().year + 1)
+    # Initiate the Fitbit API
+    log.info("Initiating Fitbit API.")
+    client = fitbit.Fitbit(
+        CLIENT_ID,
+        CLIENT_SECRET,
+        access_token=ACCESS_TOKEN,
+        refresh_token=REFRESH_TOKEN,
+        refresh_cb=refresh_cb
+    )
 
-# Pull data
-log.info("Pulling data.")
-date_range = pd.date_range(first_day, last_day, freq=pd.offsets.YearEnd())
-steps_raw = []
-for year in date_range:
-    year_of_steps = client.time_series("activities/steps", period="1y", base_date=year)
-    steps_raw.extend(year_of_steps["activities-steps"])
-steps = pd.DataFrame(steps_raw)
+    # Define dates to pull data for
+    log.info("Defining dates to pull data for.")
+    first_day = datetime(2015, 7, 26)
+    last_day = datetime.today().replace(year=datetime.today().year + 1)
 
-# Process data
-log.info("Processing data.")
-steps.rename(columns={"dateTime": "Date", "value": "Steps"}, inplace=True)
-steps["Steps"] = steps["Steps"].astype(int)
-steps = steps[steps["Steps"] > 0]
-steps.set_index("Date", inplace=True)
+    # Pull data
+    log.info("Pulling data.")
+    date_range = pd.date_range(first_day, last_day, freq=pd.offsets.YearEnd())
+    steps_raw = []
+    for year in date_range:
+        year_of_steps = client.time_series(
+            "activities/steps", period="1y", base_date=year)
+        steps_raw.extend(year_of_steps["activities-steps"])
+    steps = pd.DataFrame(steps_raw)
 
-# Store data
-log.info(f"Finalized data before pushing to CSV:\n{steps}")
-steps.to_csv("data/fitbit.csv")
+    # Process data
+    log.info("Processing data.")
+    steps.rename(columns={"dateTime": "Date", "value": "Steps"}, inplace=True)
+    steps["Steps"] = steps["Steps"].astype(int)
+    steps = steps[steps["Steps"] > 0]
+    steps.set_index("Date", inplace=True)
 
-# Commit data to git
-commit_csv()
+    # Store data
+    log.info(f"Finalized data before pushing to CSV:\n{steps}")
+    steps.to_csv("data/fitbit.csv")
+
+    # Commit data to git
+    commit_csv()
