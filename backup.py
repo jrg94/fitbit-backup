@@ -26,7 +26,7 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 
-def refresh_cb(token: dict):
+def refresh_cb(token: dict) -> None:
     """
     Provides a mechanism for updating the Fitbit API tokens.
 
@@ -39,6 +39,22 @@ def refresh_cb(token: dict):
         log.info("Updating FITBIT_REFRESH_TOKEN.")
         dotenv.set_key(".env", "FITBIT_REFRESH_TOKEN", token["refresh_token"])
     dotenv.set_key(".env", "FITBIT_EXPIRES_AT", str(token["expires_at"]))
+
+
+def commit_csv() -> None:
+    """
+    Commits the fitbit data to the personal data repo.
+    """
+    with tempfile.TemporaryDirectory() as dir:
+        repo = Repo.clone_from("https://github.com/jrg94/personal-data.git", dir)
+        health_data_path = Path(dir) / "health"
+        shutil.copyfile("data/fitbit.csv", str(health_data_path / "fitbit.csv"))
+        repo.index.add([str(health_data_path / "fitbit.csv")])
+        commit = repo.index.commit(f"Updated fitbit data automatically: {commit.stats.files}")
+        if not commit.stats.files:
+            log.info("No changes to commit.")
+            repo.remote(name="origin").push()
+        repo.close()
 
 
 # Load the .env file
@@ -89,11 +105,4 @@ log.info(f"Finalized data before pushing to CSV:\n{steps}")
 steps.to_csv("data/fitbit.csv")
 
 # Commit data to git
-with tempfile.TemporaryDirectory() as dir:
-    repo = Repo.clone_from("https://github.com/jrg94/personal-data.git", dir)
-    health_data_path = Path(dir) / "health"
-    shutil.copyfile("data/fitbit.csv", str(health_data_path / "fitbit.csv"))
-    repo.index.add([str(health_data_path / "fitbit.csv")])
-    repo.index.commit("Updated fitbit data.")
-    repo.remote(name="origin").push()
-    repo.close()
+commit_csv()
