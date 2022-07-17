@@ -85,8 +85,8 @@ steps = steps[steps["Steps"] > 0]
 steps.set_index("Date", inplace=True)
 
 # Store data
+log.info(f"Finalized data before pushing to CSV:\n{steps}")
 steps.to_csv("data/fitbit.csv")
-print(steps)
 
 # Commit data to git
 with tempfile.TemporaryDirectory() as dir:
@@ -96,3 +96,4 @@ with tempfile.TemporaryDirectory() as dir:
     repo.index.add([str(health_data_path / "fitbit.csv")])
     repo.index.commit("Updated fitbit data.")
     repo.remote(name="origin").push()
+    repo.close()
