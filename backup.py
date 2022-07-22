@@ -52,6 +52,52 @@ def commit_csv() -> None:
         repo.close()
 
 
+def get_sleep_data(date: str, to_df: dict) -> None:
+    """
+    A helper function for retrieving sleep data.
+    
+    :param date: the date of sleep to pull
+    :param to_df: the dictionary to add the data to
+    """
+    day_of_sleep: dict = client.sleep(date)
+    log.info(f"Retrieve sleep data for {date}: {day_of_sleep}")
+    day_of_sleep = day_of_sleep["summary"]
+    day_of_sleep.pop("stages", None)
+    if all(v > 0 for v in day_of_sleep.values()):
+        to_df |= day_of_sleep
+        
+        
+def get_steps_data(date: str, to_df: dict) -> None:
+    """
+    A helper function for retrieving steps data.
+    
+    :param date: the date of steps to pull
+    :param to_df: the dictionary to add the data to
+    """
+    day_of_steps: dict = client.time_series(
+        "activities/steps", 
+        base_date=date, 
+        period="1d"
+    )
+    log.info(f"Retrieve steps data for {date}: {day_of_steps}")
+    day_of_steps = day_of_steps["activities-steps"][0]
+    to_df |= day_of_steps
+    
+    
+def get_body_data(date: str, to_df: dict) -> None:
+    """
+    A helper function for retrieving body data.
+    
+    :param date: the date of body data to pull
+    :param to_df: the dictionary to add the data to
+    """
+    day_of_body: dict = client.body(date)
+    log.info(f"Retrieve body data for {date}: {day_of_body}")
+    day_of_body = day_of_body["body"]
+    if all(v > 0 for v in day_of_body.values()):
+        to_df |= day_of_body
+        
+
 def get_row_of_data(date: str) -> tuple[pd.DataFrame, int]:
     """
     Grabs a day's worth of data from the Fitbit API.
@@ -71,24 +117,10 @@ def get_row_of_data(date: str) -> tuple[pd.DataFrame, int]:
         "totalTimeInBed": "Total Time in Bed (minutes)",
     }
 
-    day_of_sleep: dict = client.sleep(date)
-    log.info(f"Retrieve sleep data for {date}: {day_of_sleep}")
-    day_of_sleep = day_of_sleep["summary"]
-    day_of_sleep.pop("stages", None)
-    if all(v > 0 for v in day_of_sleep.values()):
-        to_df |= day_of_sleep
-
-    day_of_steps: dict = client.time_series(
-        "activities/steps", base_date=date, period="1d")
-    log.info(f"Retrieve steps data for {date}: {day_of_steps}")
-    day_of_steps = day_of_steps["activities-steps"][0]
-    to_df |= day_of_steps
-
-    day_of_body: dict = client.body(date)
-    log.info(f"Retrieve body data for {date}: {day_of_body}")
-    day_of_body = day_of_body["body"]
-    if all(v > 0 for v in day_of_body.values()):
-        to_df |= day_of_body
+    # Fitbit queries
+    get_sleep_data(date, to_df)
+    get_steps_data(date, to_df)
+    get_body_data(date, to_df)
 
     df = pd.DataFrame([to_df])
     df.rename(columns=columns, inplace=True)
@@ -116,10 +148,14 @@ def get_latest_data():
         freq="D"
     )
     try:
+        count = 0
         for date in date_range:
             row, curr = get_row_of_data(date)
             requests += curr
             df = pd.concat([df, row])
+            count += 1
+            if count >= 3:
+                break
     except fitbit.exceptions.HTTPTooManyRequests:
         log.warning(f"Reached rate limit on this run.")
     df = df[~df.index.duplicated(keep="last")]
