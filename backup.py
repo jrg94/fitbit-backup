@@ -68,15 +68,21 @@ def get_row_of_data(date: str) -> tuple[pd.DataFrame, int]:
         "totalTimeInBed": "Total Time in Bed (minutes)",
     }
     
-    day_of_sleep: dict = client.sleep(date)["summary"]
+    day_of_sleep: dict = client.sleep(date)
+    log.info(f"Retrieve sleep data for {date}: {day_of_sleep}")
+    day_of_sleep = day_of_sleep["summary"]
     day_of_sleep.pop("stages", None)
     if all(v > 0 for v in day_of_sleep.values()):
         to_df |= day_of_sleep
     
-    day_of_steps: dict = client.time_series("activities/steps", base_date=date, period="1d")["activities-steps"][0]
+    day_of_steps: dict = client.time_series("activities/steps", base_date=date, period="1d")
+    log.info(f"Retrieve steps data for {date}: {day_of_steps}")
+    day_of_steps = day_of_steps["activities-steps"][0]
     to_df |= day_of_steps
     
-    day_of_body: dict = client.body(date)["body"]
+    day_of_body: dict = client.body(date)
+    log.info(f"Retrieve body data for {date}: {day_of_body}")
+    day_of_body = day_of_body["body"]
     if all(v > 0 for v in day_of_body.values()):
         to_df |= day_of_body
     
