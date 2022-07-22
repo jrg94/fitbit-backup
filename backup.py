@@ -69,7 +69,7 @@ def get_row_of_data(date: str) -> tuple[pd.DataFrame, int]:
     }
     
     day_of_sleep: dict = client.sleep(date)["summary"]
-    day_of_sleep.pop("stages")
+    day_of_sleep.pop("stages", None)
     to_df |= day_of_sleep
     
     day_of_steps: dict = client.time_series("activities/steps", base_date=date, period="1d")["activities-steps"][0]
@@ -95,12 +95,19 @@ def get_latest_data():
     df = pd.read_csv("https://raw.githubusercontent.com/jrg94/personal-data/main/health/fitbit.csv")
     df["Date"] = pd.to_datetime(df["Date"])
     df.set_index("Date", inplace=True)
-    while (latest_date := df.index.max()) < datetime.today():
-        date_range = pd.date_range(latest_date, periods=2, freq="D", inclusive="right")
+    latest_date = df.index.max()
+    date_range = pd.date_range(
+        start=latest_date, 
+        end=datetime.today(), 
+        freq="D" 
+    )
+    try:
         for date in date_range:
             row, curr = get_row_of_data(date)
             requests += curr
-            pd.concat([df, row])
+            df.merge(row, how="right", left_index=True, right_index=True)
+    except fitbit.exceptions.HTTPTooManyRequests:
+        log.warning(f"Reached rate limit on this run.")
     return df, requests
 
 
@@ -145,4 +152,5 @@ if __name__ == "__main__":
     
     #latest_df.to_csv("data/fitbit.csv")
     
+    log.info(f"Committing the data to the personal data repo:\n{latest_df}")
     commit_csv()
