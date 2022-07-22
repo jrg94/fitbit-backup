@@ -49,12 +49,12 @@ def commit_csv() -> None:
         repo.close()
         
         
-def get_row_of_data(date: str) -> pd.DataFrame:
+def get_row_of_data(date: str) -> tuple[pd.DataFrame, int]:
     """
     Grabs a day's worth of data from the Fitbit API.
     
     :param date: the date to pull data for
-    :return: a dataframe of the data
+    :return: a dataframe of the data and the number of requests to generate a row
     """
     to_df = {}
     columns = {
@@ -81,52 +81,27 @@ def get_row_of_data(date: str) -> pd.DataFrame:
     
     df = pd.DataFrame(to_df, index=[date])
     df.rename(columns=columns, inplace=True)
-    return df
+    log.info(f"Collected a row of data:\n{df}")
+    return df, 3
 
 
 def get_latest_data():
+    """
+    Takes the existing data and updates it with the latest data.
+    
+    :return: a dataframe of the complete data set
+    """
+    requests = 0
     df = pd.read_csv("https://raw.githubusercontent.com/jrg94/personal-data/main/health/fitbit.csv")
     df["Date"] = pd.to_datetime(df["Date"])
     df.set_index("Date", inplace=True)
     while (latest_date := df.index.max()) < datetime.today():
-        print("Grrrrr")
         date_range = pd.date_range(latest_date, periods=2, freq="D", inclusive="right")
         for date in date_range:
-            print(date)
-            row = get_row_of_data(date)
+            row, curr = get_row_of_data(date)
+            requests += curr
             pd.concat([df, row])
-            print('help')
-        
-        
-def get_fitbit_data(time_series: str, period: str, key: str, freq: str = pd.offsets.YearEnd()) -> tuple[list[dict], int]:
-    """
-    Returns all data for a given time series.
-    
-    :param time_series: the time series to retrieve (e.g., activities/steps)
-    :param period: the period to retrieve (e.g., 1d, 7d, 30d)
-    :param key: the key to use for retrieving the sample from the API payload (e.g., activities-steps)
-    :param freq: the frequency for filtering dates as defined in pd.date_range
-    :return: a tuple of the data and the number of requests made for tracking purposes
-    """
-    
-    # Define dates to pull data for
-    log.info("Defining dates to pull data for.")
-    first_day = datetime(2015, 7, 26)
-    last_day = datetime.today().replace(year=datetime.today().year + 1)
-    
-    # Pull data
-    log.info("Pulling data.")
-    requests = 0
-    date_range = pd.date_range(first_day, last_day, freq=freq)
-    data_set = []
-    for interval in date_range:
-        year_of_steps = client.time_series(time_series, period=period, base_date=interval)
-        log.info(f"{interval}: Retrieved {year_of_steps}.")
-        data_set.extend(year_of_steps[key])
-        requests += 1
-        
-    log.info(f"Collected raw data:\n{data_set}")
-    return data_set, requests
+    return df, requests
 
 
 if __name__ == "__main__":
@@ -165,45 +140,9 @@ if __name__ == "__main__":
         refresh_cb=refresh_cb
     )
 
-    get_latest_data()
-
-    """
-    # Pull data
-    requests = 0
-    steps_raw, steps_requests = get_fitbit_data("activities/steps", "1y", "activities-steps")
-    requests += steps_requests
-    steps_data = pd.DataFrame(steps_raw)
-    log.info("Processing data.")
-    steps_data.rename(columns={"dateTime": "Date", "value": "Steps"}, inplace=True)
-    steps_data["Steps"] = steps_data["Steps"].astype(int)
-    steps_data = steps_data[steps_data["Steps"] > 0]
-    steps_data.set_index("Date", inplace=True)
+    latest_df, requests = get_latest_data()
+    log.info(f"Made {requests} requests while updating the data.")
     
-    weight_raw, weight_requests = get_fitbit_data("body/log/weight", "1m", "weight", pd.offsets.MonthEnd())
-    requests += weight_requests
-    log.info(f"Completed {requests} requests out of our 150 limit.")
-    weight_data = pd.DataFrame(weight_raw)
-    weight_data.rename(
-        columns={
-            "date": "Date", 
-            "weight": "Weight", 
-            "bmi": "BMI", 
-            "fat": "Body Fat %", 
-            "source": "Weight Source",
-            "time": "Weight Time"
-        }, 
-        inplace=True
-    )
-    weight_data.drop("logId", axis=1, inplace=True)
-    weight_data["Weight"] = weight_data["Weight"].astype(float)
-    weight_data.set_index("Date", inplace=True)
+    #latest_df.to_csv("data/fitbit.csv")
     
-    data_set = steps_data.join(weight_data, how="outer")
-
-    # Store data
-    log.info(f"Finalized data before pushing to CSV:\n{data_set}")
-    data_set.to_csv("data/fitbit.csv")
-
-    # Commit data to git
     commit_csv()
-    """
