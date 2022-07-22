@@ -49,6 +49,55 @@ def commit_csv() -> None:
         repo.close()
         
         
+def get_row_of_data(date: str) -> pd.DataFrame:
+    """
+    Grabs a day's worth of data from the Fitbit API.
+    
+    :param date: the date to pull data for
+    :return: a dataframe of the data
+    """
+    to_df = {}
+    columns = {
+        "dateTime": "date", 
+        "value": "Steps", 
+        "bmi": "BMI", 
+        "fat": "Body Fat %", 
+        "weight": "Weight", 
+        "totalMinutesAsleep": "Total Sleep (minutes)",
+        "totalSleepRecords": "Total Sleep Records",
+        "totalTimeInBed": "Total Time in Bed (minutes)",
+    }
+    
+    day_of_sleep: dict = client.sleep(date)["summary"]
+    day_of_sleep.pop("stages")
+    to_df |= day_of_sleep
+    
+    day_of_steps: dict = client.time_series("activities/steps", base_date=date, period="1d")["activities-steps"][0]
+    to_df |= day_of_steps
+    
+    day_of_body: dict = client.body(date)["body"]
+    # TODO: deal with zero values
+    to_df |= day_of_body
+    
+    df = pd.DataFrame(to_df, index=[date])
+    df.rename(columns=columns, inplace=True)
+    return df
+
+
+def get_latest_data():
+    df = pd.read_csv("https://raw.githubusercontent.com/jrg94/personal-data/main/health/fitbit.csv")
+    df["Date"] = pd.to_datetime(df["Date"])
+    df.set_index("Date", inplace=True)
+    while (latest_date := df.index.max()) < datetime.today():
+        print("Grrrrr")
+        date_range = pd.date_range(latest_date, periods=2, freq="D", inclusive="right")
+        for date in date_range:
+            print(date)
+            row = get_row_of_data(date)
+            pd.concat([df, row])
+            print('help')
+        
+        
 def get_fitbit_data(time_series: str, period: str, key: str, freq: str = pd.offsets.YearEnd()) -> tuple[list[dict], int]:
     """
     Returns all data for a given time series.
@@ -116,6 +165,9 @@ if __name__ == "__main__":
         refresh_cb=refresh_cb
     )
 
+    get_latest_data()
+
+    """
     # Pull data
     requests = 0
     steps_raw, steps_requests = get_fitbit_data("activities/steps", "1y", "activities-steps")
@@ -154,3 +206,4 @@ if __name__ == "__main__":
 
     # Commit data to git
     commit_csv()
+    """
