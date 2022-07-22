@@ -111,8 +111,9 @@ def get_heart_data(date: str, to_df: dict) -> None:
         period="1d"
     )
     log.info(f"Retrieve steps data for {date}: {day_of_heart}")
-    day_of_heart = day_of_heart["activities-heart"][0]["value"]["restingHeartRate"]
-    to_df |= {"restingHeartRate": day_of_heart}
+    day_of_heart = day_of_heart["activities-heart"][0]["value"].get("restingHeartRate")
+    if day_of_heart:
+        to_df |= {"restingHeartRate": day_of_heart}
         
 
 def get_row_of_data(date: str) -> tuple[pd.DataFrame, int]:
