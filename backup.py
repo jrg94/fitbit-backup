@@ -97,6 +97,23 @@ def get_body_data(date: str, to_df: dict) -> None:
     if all(v > 0 for v in day_of_body.values()):
         to_df |= day_of_body
         
+        
+def get_heart_data(date: str, to_df: dict) -> None:
+    """
+    A helper function for retrieving heart data.
+    
+    :param date: the date of heart data to pull
+    :param to_df: the dictionary to add the data to
+    """
+    day_of_heart = client.time_series(
+        "activities/heart", 
+        base_date=date, 
+        period="1d"
+    )
+    log.info(f"Retrieve steps data for {date}: {day_of_heart}")
+    day_of_heart = day_of_heart["activities-heart"][0]["value"]["restingHeartRate"]
+    to_df |= {"restingHeartRate": day_of_heart}
+        
 
 def get_row_of_data(date: str) -> tuple[pd.DataFrame, int]:
     """
@@ -115,19 +132,21 @@ def get_row_of_data(date: str) -> tuple[pd.DataFrame, int]:
         "totalMinutesAsleep": "Total Sleep (minutes)",
         "totalSleepRecords": "Total Sleep Records",
         "totalTimeInBed": "Total Time in Bed (minutes)",
+        "restingHeartRate": "Resting Heart Rate",
     }
 
     # Fitbit queries
     get_sleep_data(date, to_df)
     get_steps_data(date, to_df)
     get_body_data(date, to_df)
+    get_heart_data(date, to_df)
 
     df = pd.DataFrame([to_df])
     df.rename(columns=columns, inplace=True)
     df["Date"] = pd.to_datetime(df["Date"])
     df.set_index("Date", inplace=True)
     log.info(f"Collected a row of data:\n{df}")
-    return df, 3
+    return df, 4
 
 
 def get_latest_data():
@@ -148,14 +167,10 @@ def get_latest_data():
         freq="D"
     )
     try:
-        count = 0
         for date in date_range:
             row, curr = get_row_of_data(date)
             requests += curr
             df = pd.concat([df, row])
-            count += 1
-            if count >= 3:
-                break
     except fitbit.exceptions.HTTPTooManyRequests:
         log.warning(f"Reached rate limit on this run.")
     df = df[~df.index.duplicated(keep="last")]
