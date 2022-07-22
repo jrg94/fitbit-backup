@@ -58,7 +58,7 @@ def get_row_of_data(date: str) -> tuple[pd.DataFrame, int]:
     """
     to_df = {}
     columns = {
-        "dateTime": "date", 
+        "dateTime": "Date", 
         "value": "Steps", 
         "bmi": "BMI", 
         "fat": "Body Fat %", 
@@ -70,17 +70,20 @@ def get_row_of_data(date: str) -> tuple[pd.DataFrame, int]:
     
     day_of_sleep: dict = client.sleep(date)["summary"]
     day_of_sleep.pop("stages", None)
-    to_df |= day_of_sleep
+    if all(v > 0 for v in day_of_sleep.values()):
+        to_df |= day_of_sleep
     
     day_of_steps: dict = client.time_series("activities/steps", base_date=date, period="1d")["activities-steps"][0]
     to_df |= day_of_steps
     
     day_of_body: dict = client.body(date)["body"]
-    # TODO: deal with zero values
-    to_df |= day_of_body
+    if all(v > 0 for v in day_of_body.values()):
+        to_df |= day_of_body
     
-    df = pd.DataFrame(to_df, index=[date])
+    df = pd.DataFrame([to_df])
     df.rename(columns=columns, inplace=True)
+    df["Date"] = pd.to_datetime(df["Date"])
+    df.set_index("Date", inplace=True)
     log.info(f"Collected a row of data:\n{df}")
     return df, 3
 
@@ -105,9 +108,10 @@ def get_latest_data():
         for date in date_range:
             row, curr = get_row_of_data(date)
             requests += curr
-            df.merge(row, how="right", left_index=True, right_index=True)
+            df = pd.concat([df, row])
     except fitbit.exceptions.HTTPTooManyRequests:
         log.warning(f"Reached rate limit on this run.")
+    df = df[~df.index.duplicated(keep="last")]
     return df, requests
 
 
@@ -150,7 +154,7 @@ if __name__ == "__main__":
     latest_df, requests = get_latest_data()
     log.info(f"Made {requests} requests while updating the data.")
     
-    #latest_df.to_csv("data/fitbit.csv")
+    latest_df.to_csv("data/fitbit.csv")
     
     log.info(f"Committing the data to the personal data repo:\n{latest_df}")
     commit_csv()
