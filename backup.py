@@ -145,7 +145,7 @@ def get_row_of_data(date: str) -> tuple[pd.DataFrame, int]:
     
     if not to_df:
         log.warning(f"No data for {date}")
-        return None, 0
+        return None, 4
     else:
         df = pd.DataFrame([to_df])
         df.rename(columns=columns, inplace=True)
