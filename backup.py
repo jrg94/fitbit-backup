@@ -81,7 +81,8 @@ def get_steps_data(date: str, to_df: dict) -> None:
     )
     log.info(f"Retrieve steps data for {date}: {day_of_steps}")
     day_of_steps = day_of_steps["activities-steps"][0]
-    to_df |= day_of_steps
+    if day_of_steps["value"] != '0':
+        to_df |= day_of_steps
     
     
 def get_body_data(date: str, to_df: dict) -> None:
@@ -110,7 +111,7 @@ def get_heart_data(date: str, to_df: dict) -> None:
         base_date=date, 
         period="1d"
     )
-    log.info(f"Retrieve steps data for {date}: {day_of_heart}")
+    log.info(f"Retrieve heart data for {date}: {day_of_heart}")
     day_of_heart = day_of_heart["activities-heart"][0]["value"].get("restingHeartRate")
     if day_of_heart:
         to_df |= {"restingHeartRate": day_of_heart}
@@ -141,13 +142,17 @@ def get_row_of_data(date: str) -> tuple[pd.DataFrame, int]:
     get_steps_data(date, to_df)
     get_body_data(date, to_df)
     get_heart_data(date, to_df)
-
-    df = pd.DataFrame([to_df])
-    df.rename(columns=columns, inplace=True)
-    df["Date"] = pd.to_datetime(df["Date"])
-    df.set_index("Date", inplace=True)
-    log.info(f"Collected a row of data:\n{df}")
-    return df, 4
+    
+    if not to_df:
+        log.warning(f"No data for {date}")
+        return None, 0
+    else:
+        df = pd.DataFrame([to_df])
+        df.rename(columns=columns, inplace=True)
+        df["Date"] = pd.to_datetime(df["Date"])
+        df.set_index("Date", inplace=True)
+        log.info(f"Collected a row of data:\n{df}")
+        return df, 4
 
 
 def get_latest_data():
@@ -171,7 +176,8 @@ def get_latest_data():
         for date in date_range:
             row, curr = get_row_of_data(date)
             requests += curr
-            df = pd.concat([df, row])
+            if isinstance(row, pd.DataFrame):
+                df = pd.concat([df, row])
     except fitbit.exceptions.HTTPTooManyRequests:
         log.warning(f"Reached rate limit on this run.")
     df = df[~df.index.duplicated(keep="last")]
