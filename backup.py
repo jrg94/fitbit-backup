@@ -162,11 +162,10 @@ def get_latest_data():
     :return: a dataframe of the complete data set
     """
     requests = 0
-    df = pd.read_csv(
-        "https://raw.githubusercontent.com/jrg94/personal-data/main/health/fitbit.csv")
+    df = pd.read_csv("https://raw.githubusercontent.com/jrg94/personal-data/main/health/fitbit.csv")
     df["Date"] = pd.to_datetime(df["Date"])
     df.set_index("Date", inplace=True)
-    latest_date = df.index.max()
+    latest_date = df.index[-7] # last 7 days to account for missing syncs
     date_range = pd.date_range(
         start=latest_date,
         end=datetime.today(),
