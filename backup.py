@@ -10,49 +10,60 @@ from pathlib import Path
 import dotenv
 import fitbit
 import pandas as pd
-from git import Repo
 import requests
+from git import Repo
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-
+from selenium.webdriver.support.ui import WebDriverWait
+from webdriver_manager.chrome import ChromeDriverManager
 
 log = logging.getLogger(__name__)
 
 
-def automate_code_retrieval():
+def automate_code_retrieval() -> None:
+    """
+    Grabs the initial code from the Fitbit website containing
+    the correct scopes.
+
+    :return: the code as a string
+    """
     url = "https://www.fitbit.com/oauth2/authorize" \
         "?response_type=code" \
         f"&client_id={os.environ.get('FITBIT_CLIENT_ID')}" \
         "&redirect_uri=http%3A%2F%2F127.0.0.1%3A8080%2F" \
         "&scope=activity%20heartrate%20location%20nutrition%20profile%20settings%20sleep%20social%20weight%20oxygen_saturation%20respiratory_rate%20temperature" \
         "&expires_in=604800"
-        
+
     # Get URL
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()))    
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()))
     driver.get(url)
-    
+
     # Complete login form
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, "//input[@type='email']")))
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.XPATH, "//input[@type='email']")))
     username_input = driver.find_element(By.XPATH, "//input[@type='email']")
     password_input = driver.find_element(By.XPATH, "//input[@type='password']")
-    submit = driver.find_element(By.XPATH, "//form[@id='loginForm']/div/button")
+    submit = driver.find_element(
+        By.XPATH, "//form[@id='loginForm']/div/button")
     username_input.send_keys(os.environ.get("FITBIT_USERNAME"))
     password_input.send_keys(os.environ.get("FITBIT_PASSWORD"))
     submit.click()
-    
+
     # Get code
     WebDriverWait(driver, 10).until(EC.url_contains("127.0.0.1:8080"))
     code = driver.current_url.split("code=")[-1].split("#")[0]
     driver.quit()
-    
+
     return code
 
 
 def automate_token_retrieval(code: str):
+    """
+    Using the code from the Fitbit website, retrieves the
+    correct set of tokens.
+    """
     data = {
         "clientId": os.environ.get("FITBIT_CLIENT_ID"),
         "grant_type": "authorization_code",
@@ -60,13 +71,15 @@ def automate_token_retrieval(code: str):
         "code": code
     }
     basic_token = base64.b64encode(
-        f"{os.environ.get('FITBIT_CLIENT_ID')}:{os.environ.get('FITBIT_CLIENT_SECRET')}".encode("utf-8")
+        f"{os.environ.get('FITBIT_CLIENT_ID')}:{os.environ.get('FITBIT_CLIENT_SECRET')}".encode(
+            "utf-8")
     ).decode("utf-8")
     headers = {
         "Content-Type": "application/x-www-form-urlencoded",
         "Authorization": f"Basic {basic_token}"
     }
-    response = requests.post(data=data, headers=headers, url = "https://api.fitbit.com/oauth2/token")
+    response = requests.post(data=data, headers=headers,
+                             url="https://api.fitbit.com/oauth2/token")
     keys = response.json()
     dotenv.set_key(".env", "FITBIT_ACCESS_TOKEN", keys["access_token"])
     dotenv.set_key(".env", "FITBIT_REFRESH_TOKEN", keys["refresh_token"])
@@ -114,7 +127,7 @@ def commit_csv() -> None:
 def get_sleep_data(client, date: str, to_df: dict) -> None:
     """
     A helper function for retrieving sleep data.
-    
+
     :param date: the date of sleep to pull
     :param to_df: the dictionary to add the data to
     """
@@ -124,30 +137,30 @@ def get_sleep_data(client, date: str, to_df: dict) -> None:
     day_of_sleep.pop("stages", None)
     if all(v > 0 for v in day_of_sleep.values()):
         to_df |= day_of_sleep
-        
-        
+
+
 def get_steps_data(client, date: str, to_df: dict) -> None:
     """
     A helper function for retrieving steps data.
-    
+
     :param date: the date of steps to pull
     :param to_df: the dictionary to add the data to
     """
     day_of_steps: dict = client.time_series(
-        "activities/steps", 
-        base_date=date, 
+        "activities/steps",
+        base_date=date,
         period="1d"
     )
     log.info(f"Retrieve steps data for {date}: {day_of_steps}")
     day_of_steps = day_of_steps["activities-steps"][0]
     if day_of_steps["value"] != '0':
         to_df |= day_of_steps
-    
-    
+
+
 def get_body_data(client, date: str, to_df: dict) -> None:
     """
     A helper function for retrieving body data.
-    
+
     :param date: the date of body data to pull
     :param to_df: the dictionary to add the data to
     """
@@ -156,25 +169,26 @@ def get_body_data(client, date: str, to_df: dict) -> None:
     day_of_body = day_of_body["body"]
     if all(v > 0 for v in day_of_body.values()):
         to_df |= day_of_body
-        
-        
+
+
 def get_heart_data(client, date: str, to_df: dict) -> None:
     """
     A helper function for retrieving heart data.
-    
+
     :param date: the date of heart data to pull
     :param to_df: the dictionary to add the data to
     """
     day_of_heart = client.time_series(
-        "activities/heart", 
-        base_date=date, 
+        "activities/heart",
+        base_date=date,
         period="1d"
     )
     log.info(f"Retrieve heart data for {date}: {day_of_heart}")
-    day_of_heart = day_of_heart["activities-heart"][0]["value"].get("restingHeartRate")
+    day_of_heart = day_of_heart["activities-heart"][0]["value"].get(
+        "restingHeartRate")
     if day_of_heart:
         to_df |= {"restingHeartRate": day_of_heart}
-        
+
 
 def get_row_of_data(client, date: str) -> tuple[pd.DataFrame, int]:
     """
@@ -201,7 +215,7 @@ def get_row_of_data(client, date: str) -> tuple[pd.DataFrame, int]:
     get_steps_data(client, date, to_df)
     get_body_data(client, date, to_df)
     get_heart_data(client, date, to_df)
-    
+
     if not to_df:
         log.warning(f"No data for {date}")
         return None, 4
@@ -221,10 +235,11 @@ def get_latest_data(client):
     :return: a dataframe of the complete data set
     """
     requests = 0
-    df = pd.read_csv("https://raw.githubusercontent.com/jrg94/personal-data/main/health/fitbit.csv")
+    df = pd.read_csv(
+        "https://raw.githubusercontent.com/jrg94/personal-data/main/health/fitbit.csv")
     df["Date"] = pd.to_datetime(df["Date"])
     df.set_index("Date", inplace=True)
-    latest_date = df.index[-7] # last 7 days to account for missing syncs
+    latest_date = df.index[-7]  # last 7 days to account for missing syncs
     date_range = pd.date_range(
         start=latest_date,
         end=datetime.today(),
@@ -246,7 +261,7 @@ def main():
     # Load the .env file
     log.info("Loading .env file.")
     dotenv.load_dotenv()
-    
+
     # Initiate the Fitbit API
     log.info("Initiating Fitbit API.")
     client = fitbit.Fitbit(
@@ -256,7 +271,7 @@ def main():
         refresh_token=os.environ.get("FITBIT_REFRESH_TOKEN"),
         refresh_cb=refresh_cb
     )
-    
+
     # Collect data
     latest_df, requests = get_latest_data(client)
     log.info(f"Made {requests} requests while updating the data.")
@@ -274,7 +289,7 @@ if __name__ == "__main__":
         "logs",
         "fitbit.log"
     )
-    
+
     logging.basicConfig(
         handlers=[RotatingFileHandler(
             log_path, backupCount=10, maxBytes=1000000)],
@@ -290,4 +305,3 @@ if __name__ == "__main__":
         code = automate_code_retrieval()
         automate_token_retrieval(code)
         main()
-        
