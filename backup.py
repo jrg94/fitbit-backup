@@ -84,6 +84,7 @@ def automate_token_retrieval(code: str):
     dotenv.set_key(".env", "FITBIT_ACCESS_TOKEN", keys["access_token"])
     dotenv.set_key(".env", "FITBIT_REFRESH_TOKEN", keys["refresh_token"])
     dotenv.set_key(".env", "FITBIT_EXPIRES_AT", str(keys["expires_in"]))
+    dotenv.load_dotenv(override=True)
 
 
 def refresh_cb(token: dict) -> None:
