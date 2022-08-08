@@ -29,6 +29,7 @@ def automate_code_retrieval() -> str:
 
     :return: the code as a string
     """
+    log.info("Starting the process of generating a new access token.")
     url = "https://www.fitbit.com/oauth2/authorize" \
         "?response_type=code" \
         f"&client_id={os.environ.get('FITBIT_CLIENT_ID')}" \
@@ -64,6 +65,7 @@ def automate_token_retrieval(code: str):
     Using the code from the Fitbit website, retrieves the
     correct set of tokens.
     """
+    log.info("Using code to access new tokens.")
     data = {
         "clientId": os.environ.get("FITBIT_CLIENT_ID"),
         "grant_type": "authorization_code",
@@ -93,6 +95,7 @@ def refresh_cb(token: dict) -> None:
 
     :param token: a dictionary of token data
     """
+    log.info("Refreshing Fitbit tokens.")
     if os.environ.get("FITBIT_ACCESS_TOKEN") != token["access_token"]:
         log.info("Updating FITBIT_ACCESS_TOKEN.")
         dotenv.set_key(".env", "FITBIT_ACCESS_TOKEN", token["access_token"])
