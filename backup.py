@@ -22,7 +22,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 log = logging.getLogger(__name__)
 
 
-def automate_code_retrieval() -> None:
+def automate_code_retrieval() -> str:
     """
     Grabs the initial code from the Fitbit website containing
     the correct scopes.
@@ -99,6 +99,7 @@ def refresh_cb(token: dict) -> None:
         log.info("Updating FITBIT_REFRESH_TOKEN.")
         dotenv.set_key(".env", "FITBIT_REFRESH_TOKEN", token["refresh_token"])
     dotenv.set_key(".env", "FITBIT_EXPIRES_AT", str(token["expires_at"]))
+    dotenv.load_dotenv(override=True)
 
 
 def commit_csv() -> None:
