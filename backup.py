@@ -120,8 +120,8 @@ def commit_csv() -> None:
             str(health_data_path / "fitbit.csv")
         )
         repo.index.add([str(health_data_path / "fitbit.csv")])
-        author = Actor("GitHub Action", "action@github.com")
-        commit = repo.index.commit(f"Updated fitbit data automatically", author=author)
+        committer = Actor("GitHub Action", "action@github.com")
+        commit = repo.index.commit(f"Updated fitbit data automatically", author=committer, committer=committer)
         if not commit.stats.files:
             log.info("No changes to commit.")
         else:
