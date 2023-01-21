@@ -11,7 +11,7 @@ import dotenv
 import fitbit
 import pandas as pd
 import requests
-from git import Repo
+from git import Actor, Repo
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
@@ -120,7 +120,8 @@ def commit_csv() -> None:
             str(health_data_path / "fitbit.csv")
         )
         repo.index.add([str(health_data_path / "fitbit.csv")])
-        commit = repo.index.commit(f"Updated fitbit data automatically")
+        author = Actor("GitHub Action", "action@github.com")
+        commit = repo.index.commit(f"Updated fitbit data automatically", author=author)
         if not commit.stats.files:
             log.info("No changes to commit.")
         else:
