@@ -266,7 +266,7 @@ def get_latest_data(client):
 def main():
     # Load the .env file
     log.info("Loading .env file.")
-    dotenv.load_dotenv()
+    dotenv.load_dotenv(override=True)
 
     # Initiate the Fitbit API
     log.info("Initiating Fitbit API.")
