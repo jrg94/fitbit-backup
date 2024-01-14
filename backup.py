@@ -290,15 +290,15 @@ def main():
 
 
 if __name__ == "__main__":
-    log_path = os.path.join(
-        os.path.abspath(os.path.dirname(__file__)),
-        "logs",
+    log_path = Path(
+        os.path.abspath(os.path.dirname(__file__)), 
+        "logs", 
         "fitbit.log"
     )
+    log_path.parent.mkdir(parents=True, exist_ok=True)
 
     logging.basicConfig(
-        handlers=[RotatingFileHandler(
-            log_path, backupCount=10, maxBytes=1000000)],
+        handlers=[RotatingFileHandler(log_path, backupCount=10, maxBytes=1000000)],
         level=logging.DEBUG,
         format='%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
         datefmt='%Y-%m-%d:%H:%M:%S',
